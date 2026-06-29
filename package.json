@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "demo:capture": "node scripts/capture-demo.mjs",
+    "postinstall": "mkdir -p public/vendor && cp node_modules/butterchurn/lib/butterchurn.min.js node_modules/butterchurn-presets/lib/butterchurnPresets.min.js public/vendor/"
   },
   "devDependencies": {
+    "playwright": "^1.61.1",
     "typescript": "~6.0.2",
     "vite": "^8.0.12"
   },

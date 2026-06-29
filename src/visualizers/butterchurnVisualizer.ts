@@ -1,7 +1,6 @@
-import butterchurn from 'butterchurn'
-import butterchurnPresets from 'butterchurn-presets'
+import { getButterchurn, getButterchurnPresets } from '../lib/butterchurnGlobals'
 
-import type { ButterchurnVisualizer as ButterchurnVisualizerInstance } from 'butterchurn'
+import type { ButterchurnVisualizerInstance } from '../lib/butterchurnGlobals'
 
 export class ButterchurnVisualizer {
   private visualizer: ButterchurnVisualizerInstance
@@ -9,6 +8,8 @@ export class ButterchurnVisualizer {
   private presetIndex = 0
 
   constructor(audioContext: AudioContext, canvas: HTMLCanvasElement) {
+    const butterchurn = getButterchurn()
+    const butterchurnPresets = getButterchurnPresets()
     const { clientWidth, clientHeight } = canvas
 
     this.visualizer = butterchurn.createVisualizer(audioContext, canvas, {
@@ -61,7 +62,7 @@ export class ButterchurnVisualizer {
   }
 
   private loadPresetByIndex(index: number): void {
-    const presets = butterchurnPresets.getPresets()
+    const presets = getButterchurnPresets().getPresets()
     const presetName = this.presetNames[index]
     const preset = presets[presetName]
 
