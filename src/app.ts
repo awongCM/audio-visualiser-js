@@ -15,8 +15,9 @@ export function createApp(root: HTMLElement): () => void {
           <p>Phase 1 — local files + Butterchurn / spectrum</p>
         </div>
         <div class="controls">
+          <button id="demo-button" type="button">Try demo</button>
           <label class="file-button">
-            <span>Choose audio file</span>
+            <span>Choose file</span>
             <input id="file-input" type="file" accept="audio/*" hidden />
           </label>
           <button id="play-button" type="button" disabled>Play</button>
@@ -49,6 +50,7 @@ export function createApp(root: HTMLElement): () => void {
   `
 
   const fileInput = root.querySelector<HTMLInputElement>('#file-input')!
+  const demoButton = root.querySelector<HTMLButtonElement>('#demo-button')!
   const playButton = root.querySelector<HTMLButtonElement>('#play-button')!
   const modeButterchurnButton = root.querySelector<HTMLButtonElement>('#mode-butterchurn')!
   const modeSpectrumButton = root.querySelector<HTMLButtonElement>('#mode-spectrum')!
@@ -157,26 +159,37 @@ export function createApp(root: HTMLElement): () => void {
   updateModeUi()
   animationFrame = window.requestAnimationFrame(renderFrame)
 
+  const loadTrack = async (load: () => Promise<void>, label: string) => {
+    try {
+      setStatus(`Loading ${label}...`)
+      await load()
+      connectVisualizer()
+      trackName.textContent = player.currentFileName
+      playButton.disabled = false
+      playButton.textContent = 'Play'
+      updateTransport()
+      setStatus('Ready — tap Play')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load audio'
+      setStatus(message)
+      playButton.disabled = true
+    }
+  }
+
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0]
     if (!file) {
       return
     }
 
-    try {
-      setStatus(`Loading ${file.name}...`)
-      await player.loadFile(file)
-      connectVisualizer()
-      trackName.textContent = player.currentFileName
-      playButton.disabled = false
-      playButton.textContent = 'Play'
-      updateTransport()
-      setStatus('Track loaded. Press Play to start.')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load audio file'
-      setStatus(message)
-      playButton.disabled = true
-    }
+    await loadTrack(() => player.loadFile(file), file.name)
+  })
+
+  demoButton.addEventListener('click', async () => {
+    await loadTrack(
+      () => player.loadUrl('/demo/demo-track.mp3', 'demo-track.mp3'),
+      'demo track',
+    )
   })
 
   playButton.addEventListener('click', async () => {

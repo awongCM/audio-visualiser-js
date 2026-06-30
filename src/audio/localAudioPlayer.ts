@@ -46,28 +46,22 @@ export class LocalAudioPlayer {
     this.audio = this.createAudioElement()
     this.audio.src = this.objectUrl
 
-    await new Promise<void>((resolve, reject) => {
-      const onReady = () => {
-        cleanup()
-        this.connectSource()
-        this.state = 'ready'
-        resolve()
-      }
+    await this.waitUntilReady(file.name)
+  }
 
-      const onError = () => {
-        cleanup()
-        this.state = 'idle'
-        reject(new Error(`Failed to load "${file.name}"`))
-      }
+  async loadUrl(url: string, name: string): Promise<void> {
+    this.teardownSource()
 
-      const cleanup = () => {
-        this.audio.removeEventListener('loadedmetadata', onReady)
-        this.audio.removeEventListener('error', onError)
-      }
+    if (this.objectUrl) {
+      URL.revokeObjectURL(this.objectUrl)
+      this.objectUrl = null
+    }
 
-      this.audio.addEventListener('loadedmetadata', onReady)
-      this.audio.addEventListener('error', onError)
-    })
+    this.fileName = name
+    this.audio = this.createAudioElement()
+    this.audio.src = url
+
+    await this.waitUntilReady(name)
   }
 
   async play(): Promise<void> {
@@ -153,5 +147,30 @@ export class LocalAudioPlayer {
     this.analyser.disconnect()
     this.source = null
     this.state = 'idle'
+  }
+
+  private waitUntilReady(label: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const onReady = () => {
+        cleanup()
+        this.connectSource()
+        this.state = 'ready'
+        resolve()
+      }
+
+      const onError = () => {
+        cleanup()
+        this.state = 'idle'
+        reject(new Error(`Failed to load "${label}"`))
+      }
+
+      const cleanup = () => {
+        this.audio.removeEventListener('loadedmetadata', onReady)
+        this.audio.removeEventListener('error', onError)
+      }
+
+      this.audio.addEventListener('loadedmetadata', onReady)
+      this.audio.addEventListener('error', onError)
+    })
   }
 }

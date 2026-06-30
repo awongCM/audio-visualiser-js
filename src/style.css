@@ -25,6 +25,11 @@ body,
 body {
   min-width: 320px;
   overflow: hidden;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
 }
 
 button,
@@ -78,7 +83,13 @@ button {
   background: rgba(255, 255, 255, 0.06);
   color: inherit;
   cursor: pointer;
+  min-height: 44px;
   transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+#demo-button {
+  background: linear-gradient(135deg, rgba(109, 91, 255, 0.35), rgba(255, 79, 216, 0.25));
+  border-color: rgba(124, 247, 255, 0.35);
 }
 
 .file-button {
@@ -186,9 +197,32 @@ button:disabled {
 @media (max-width: 720px) {
   .toolbar {
     align-items: flex-start;
+    padding: 0.75rem;
+  }
+
+  .brand p {
+    display: none;
+  }
+
+  .brand h1 {
+    font-size: 1.05rem;
   }
 
   .controls {
     width: 100%;
+  }
+
+  .overlay {
+    left: 0.65rem;
+    right: 0.65rem;
+    bottom: 0.65rem;
+    max-width: none;
+    font-size: 0.85rem;
+  }
+
+  .transport,
+  .status {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
   }
 }
