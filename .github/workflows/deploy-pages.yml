@@ -1,10 +1,8 @@
+# Run manually after enabling GitHub Pages:
+# Settings → Pages → Source: GitHub Actions
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches:
-      - master
-      - cursor/vite-butterchurn-phase1-0c4c
   workflow_dispatch:
 
 permissions:
