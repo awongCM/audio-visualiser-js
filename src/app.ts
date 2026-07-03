@@ -1,25 +1,52 @@
+import { buildAuthorizeUrl } from './auth/spotifyPkce'
+import { SpotifyAuthService } from './auth/spotifyAuthService'
+import { LocalAudioSourceAdapter } from './audio/localAudioSource'
 import { LocalAudioPlayer } from './audio/localAudioPlayer'
+import { SpotifyPlaybackPlayer } from './audio/spotifyPlaybackPlayer'
+import { isSpotifyConfigured, spotifyConfig } from './config/spotify'
 import { ButterchurnVisualizer } from './visualizers/butterchurnVisualizer'
 import { SpectrumVisualizer } from './visualizers/spectrumVisualizer'
 
 type VizMode = 'butterchurn' | 'spectrum'
+type SourceMode = 'local' | 'spotify'
 
-export function createApp(root: HTMLElement): () => void {
-  const player = new LocalAudioPlayer()
+export interface AppOptions {
+  auth?: SpotifyAuthService
+}
+
+export function createApp(root: HTMLElement, options: AppOptions = {}): () => void {
+  const auth = options.auth ?? new SpotifyAuthService()
+  const localPlayer = new LocalAudioPlayer()
+  const localSource = new LocalAudioSourceAdapter(localPlayer)
+  const spotifyPlayer = new SpotifyPlaybackPlayer(auth)
+
+  let sourceMode: SourceMode = 'local'
+  let spotifyReady = false
 
   root.innerHTML = `
     <div class="app">
       <header class="toolbar">
         <div class="brand">
           <h1>Audio Viz</h1>
-          <p>Phase 1 — local files + Butterchurn / spectrum</p>
+          <p>Phase 2a — Spotify OAuth + Web Playback SDK</p>
         </div>
         <div class="controls">
-          <button id="demo-button" type="button">Try demo</button>
-          <label class="file-button">
-            <span>Choose file</span>
-            <input id="file-input" type="file" accept="audio/*" hidden />
-          </label>
+          <div class="source-toggle" role="group" aria-label="Audio source">
+            <button id="source-local" type="button" class="active">Local</button>
+            <button id="source-spotify" type="button" ${isSpotifyConfigured() ? '' : 'disabled'}>Spotify</button>
+          </div>
+          <div id="local-controls" class="source-panel">
+            <button id="demo-button" type="button">Try demo</button>
+            <label class="file-button">
+              <span>Choose file</span>
+              <input id="file-input" type="file" accept="audio/*" hidden />
+            </label>
+          </div>
+          <div id="spotify-controls" class="source-panel hidden">
+            <button id="spotify-login" type="button">Connect Spotify</button>
+            <button id="spotify-demo" type="button" disabled>Play Today's Top Hits</button>
+            <button id="spotify-logout" type="button" class="ghost hidden">Disconnect</button>
+          </div>
           <button id="play-button" type="button" disabled>Play</button>
           <div class="mode-toggle" role="group" aria-label="Visualizer mode">
             <button id="mode-butterchurn" type="button" class="active">Butterchurn</button>
@@ -36,6 +63,7 @@ export function createApp(root: HTMLElement): () => void {
         <div class="overlay">
           <p id="track-name">No track loaded</p>
           <p id="preset-name"></p>
+          <p id="source-note" class="source-note"></p>
         </div>
       </main>
 
@@ -52,6 +80,13 @@ export function createApp(root: HTMLElement): () => void {
   const fileInput = root.querySelector<HTMLInputElement>('#file-input')!
   const demoButton = root.querySelector<HTMLButtonElement>('#demo-button')!
   const playButton = root.querySelector<HTMLButtonElement>('#play-button')!
+  const sourceLocalButton = root.querySelector<HTMLButtonElement>('#source-local')!
+  const sourceSpotifyButton = root.querySelector<HTMLButtonElement>('#source-spotify')!
+  const localControls = root.querySelector<HTMLDivElement>('#local-controls')!
+  const spotifyControls = root.querySelector<HTMLDivElement>('#spotify-controls')!
+  const spotifyLoginButton = root.querySelector<HTMLButtonElement>('#spotify-login')!
+  const spotifyDemoButton = root.querySelector<HTMLButtonElement>('#spotify-demo')!
+  const spotifyLogoutButton = root.querySelector<HTMLButtonElement>('#spotify-logout')!
   const modeButterchurnButton = root.querySelector<HTMLButtonElement>('#mode-butterchurn')!
   const modeSpectrumButton = root.querySelector<HTMLButtonElement>('#mode-spectrum')!
   const prevPresetButton = root.querySelector<HTMLButtonElement>('#prev-preset')!
@@ -60,17 +95,20 @@ export function createApp(root: HTMLElement): () => void {
   const spectrumCanvas = root.querySelector<HTMLCanvasElement>('#spectrum-canvas')!
   const trackName = root.querySelector<HTMLParagraphElement>('#track-name')!
   const presetName = root.querySelector<HTMLParagraphElement>('#preset-name')!
+  const sourceNote = root.querySelector<HTMLParagraphElement>('#source-note')!
   const currentTimeLabel = root.querySelector<HTMLSpanElement>('#current-time')!
   const durationLabel = root.querySelector<HTMLSpanElement>('#duration')!
   const seekBar = root.querySelector<HTMLInputElement>('#seek-bar')!
   const status = root.querySelector<HTMLParagraphElement>('#status')!
 
-  const butterchurnViz = new ButterchurnVisualizer(player.audioContext, butterchurnCanvas)
-  const spectrumViz = new SpectrumVisualizer(spectrumCanvas, player.analyser)
+  const butterchurnViz = new ButterchurnVisualizer(localPlayer.audioContext, butterchurnCanvas)
+  const spectrumViz = new SpectrumVisualizer(spectrumCanvas, localPlayer.analyser)
 
   let mode: VizMode = 'butterchurn'
   let animationFrame = 0
   let isSeeking = false
+
+  const activeSource = () => (sourceMode === 'local' ? localSource : spotifyPlayer)
 
   const setStatus = (message: string) => {
     status.textContent = message
@@ -109,17 +147,53 @@ export function createApp(root: HTMLElement): () => void {
   }
 
   const updateTransport = () => {
-    const duration = player.getDuration()
-    const currentTime = player.getCurrentTime()
+    const source = activeSource()
+    const duration = source.getDuration()
+    const currentTime = source.getCurrentTime()
 
     currentTimeLabel.textContent = formatTime(currentTime)
     durationLabel.textContent = formatTime(duration)
+    trackName.textContent = source.currentLabel
 
     if (!isSeeking && duration > 0) {
       seekBar.value = String(Math.round((currentTime / duration) * 1000))
     }
 
     seekBar.disabled = duration <= 0
+  }
+
+  const updateSourceUi = () => {
+    const isLocal = sourceMode === 'local'
+    sourceLocalButton.classList.toggle('active', isLocal)
+    sourceSpotifyButton.classList.toggle('active', !isLocal)
+    localControls.classList.toggle('hidden', !isLocal)
+    spotifyControls.classList.toggle('hidden', isLocal)
+
+    const spectrumAvailable = isLocal
+    modeSpectrumButton.disabled = !spectrumAvailable
+
+    if (!spectrumAvailable && mode === 'spectrum') {
+      mode = 'butterchurn'
+    }
+
+    sourceNote.textContent = isLocal
+      ? ''
+      : 'Spotify streams through the Web Playback SDK. Spectrum mode needs local files — use Butterchurn here.'
+
+    const authenticated = auth.tokens.isAuthenticated()
+    spotifyLoginButton.classList.toggle('hidden', authenticated)
+    spotifyLogoutButton.classList.toggle('hidden', !authenticated)
+    spotifyDemoButton.disabled = !authenticated || !spotifyReady
+
+    playButton.disabled = isLocal
+      ? localSource.playbackState === 'idle'
+      : !authenticated || !spotifyReady
+
+    playButton.textContent =
+      activeSource().playbackState === 'playing' ? 'Pause' : 'Play'
+
+    updateModeUi()
+    updateTransport()
   }
 
   const updateModeUi = () => {
@@ -135,19 +209,12 @@ export function createApp(root: HTMLElement): () => void {
     presetName.textContent = isButterchurn ? butterchurnViz.currentPresetName : 'Canvas frequency bars + waveform'
   }
 
-  const renderFrame = () => {
-    if (mode === 'butterchurn') {
-      butterchurnViz.render()
-    } else {
-      spectrumViz.render()
+  const connectVisualizer = () => {
+    if (sourceMode !== 'local') {
+      return
     }
 
-    updateTransport()
-    animationFrame = window.requestAnimationFrame(renderFrame)
-  }
-
-  const connectVisualizer = () => {
-    const source = player.sourceNode
+    const source = localSource.sourceNode
     if (!source) {
       return
     }
@@ -155,19 +222,25 @@ export function createApp(root: HTMLElement): () => void {
     butterchurnViz.connectAudio(source)
   }
 
-  resizeCanvas()
-  updateModeUi()
-  animationFrame = window.requestAnimationFrame(renderFrame)
+  const renderFrame = () => {
+    if (mode === 'butterchurn') {
+      butterchurnViz.render()
+    } else if (sourceMode === 'local') {
+      spectrumViz.render()
+    }
 
-  const loadTrack = async (load: () => Promise<void>, label: string) => {
+    updateTransport()
+    animationFrame = window.requestAnimationFrame(renderFrame)
+  }
+
+  const loadLocalTrack = async (load: () => Promise<void>, label: string) => {
     try {
       setStatus(`Loading ${label}...`)
       await load()
       connectVisualizer()
-      trackName.textContent = player.currentFileName
       playButton.disabled = false
       playButton.textContent = 'Play'
-      updateTransport()
+      updateSourceUi()
       setStatus('Ready — tap Play')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load audio'
@@ -176,29 +249,109 @@ export function createApp(root: HTMLElement): () => void {
     }
   }
 
+  const initializeSpotify = async () => {
+    try {
+      setStatus('Connecting Spotify player...')
+      await spotifyPlayer.initialize()
+      spotifyReady = true
+      updateSourceUi()
+      setStatus('Spotify connected — start playback or try Today\'s Top Hits')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Spotify connection failed'
+      setStatus(message)
+    }
+  }
+
+  resizeCanvas()
+  updateSourceUi()
+  animationFrame = window.requestAnimationFrame(renderFrame)
+
+  if (auth.tokens.isAuthenticated()) {
+    void initializeSpotify()
+  }
+
+  if (!isSpotifyConfigured()) {
+    sourceSpotifyButton.title = 'Set VITE_SPOTIFY_CLIENT_ID in .env'
+  }
+
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0]
     if (!file) {
       return
     }
 
-    await loadTrack(() => player.loadFile(file), file.name)
+    await loadLocalTrack(() => localSource.loadFile(file), file.name)
   })
 
   demoButton.addEventListener('click', async () => {
-    await loadTrack(
-      () => player.loadUrl('/demo/demo-track.mp3', 'demo-track.mp3'),
+    await loadLocalTrack(
+      () => localSource.loadUrl('/demo/demo-track.mp3', 'demo-track.mp3'),
       'demo track',
     )
   })
 
   playButton.addEventListener('click', async () => {
     try {
-      await player.togglePlayback()
-      playButton.textContent = player.playbackState === 'playing' ? 'Pause' : 'Play'
-      setStatus(player.playbackState === 'playing' ? 'Playing' : 'Paused')
+      await activeSource().togglePlayback()
+      playButton.textContent = activeSource().playbackState === 'playing' ? 'Pause' : 'Play'
+      setStatus(activeSource().playbackState === 'playing' ? 'Playing' : 'Paused')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Playback failed'
+      setStatus(message)
+    }
+  })
+
+  sourceLocalButton.addEventListener('click', () => {
+    sourceMode = 'local'
+    updateSourceUi()
+  })
+
+  sourceSpotifyButton.addEventListener('click', () => {
+    if (!isSpotifyConfigured()) {
+      setStatus('Add VITE_SPOTIFY_CLIENT_ID to .env and restart the dev server')
+      return
+    }
+
+    sourceMode = 'spotify'
+    updateSourceUi()
+
+    if (auth.tokens.isAuthenticated() && !spotifyReady) {
+      void initializeSpotify()
+    }
+  })
+
+  spotifyLoginButton.addEventListener('click', async () => {
+    if (!isSpotifyConfigured()) {
+      setStatus('Add VITE_SPOTIFY_CLIENT_ID to .env and restart the dev server')
+      return
+    }
+
+    const url = await buildAuthorizeUrl(
+      spotifyConfig.clientId,
+      spotifyConfig.redirectUri,
+      spotifyConfig.scopes,
+    )
+    window.location.assign(url)
+  })
+
+  spotifyLogoutButton.addEventListener('click', () => {
+    auth.tokens.clear()
+    spotifyPlayer.dispose()
+    spotifyReady = false
+    sourceMode = 'local'
+    updateSourceUi()
+    setStatus('Disconnected from Spotify')
+  })
+
+  spotifyDemoButton.addEventListener('click', async () => {
+    try {
+      await spotifyPlayer.startDemoPlayback()
+      playButton.disabled = false
+      playButton.textContent = 'Pause'
+      setStatus('Playing Today\'s Top Hits on your Audio Viz device')
+      updateSourceUi()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not start Spotify playback'
       setStatus(message)
     }
   })
@@ -209,6 +362,10 @@ export function createApp(root: HTMLElement): () => void {
   })
 
   modeSpectrumButton.addEventListener('click', () => {
+    if (sourceMode !== 'local') {
+      return
+    }
+
     mode = 'spectrum'
     updateModeUi()
   })
@@ -233,11 +390,15 @@ export function createApp(root: HTMLElement): () => void {
 
   seekBar.addEventListener('input', () => {
     const ratio = Number(seekBar.value) / 1000
-    player.seek(ratio)
+    activeSource().seek(ratio)
     updateTransport()
   })
 
-  player.element.addEventListener('ended', () => {
+  localPlayer.element.addEventListener('ended', () => {
+    if (sourceMode !== 'local') {
+      return
+    }
+
     playButton.textContent = 'Play'
     setStatus('Playback finished')
   })
@@ -247,6 +408,7 @@ export function createApp(root: HTMLElement): () => void {
   return () => {
     window.cancelAnimationFrame(animationFrame)
     window.removeEventListener('resize', resizeCanvas)
-    player.dispose()
+    localSource.dispose()
+    spotifyPlayer.dispose()
   }
 }

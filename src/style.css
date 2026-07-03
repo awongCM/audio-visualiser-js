@@ -120,14 +120,45 @@ button:disabled {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.source-toggle {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.source-toggle button,
 .mode-toggle button {
   border: none;
   background: transparent;
 }
 
+.source-toggle button.active,
 .mode-toggle button.active {
   background: linear-gradient(135deg, #6d5bff, #ff4fd8);
   color: white;
+}
+
+.source-panel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.source-panel.hidden,
+.hidden {
+  display: none !important;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+.source-note {
+  margin-top: 0.35rem !important;
+  color: rgba(124, 247, 255, 0.85) !important;
+  font-size: 0.82rem !important;
 }
 
 .stage {
