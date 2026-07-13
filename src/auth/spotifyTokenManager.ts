@@ -1,3 +1,5 @@
+import { parseSpotifyTokenPayload } from './spotifyTokenPayload'
+
 export interface SpotifyTokenSet {
   accessToken: string
   refreshToken: string | null
@@ -83,7 +85,7 @@ export class SpotifyTokenManager {
       throw new Error('Failed to refresh Spotify token')
     }
 
-    const payload = await response.json()
+    const payload = parseSpotifyTokenPayload(await response.json())
     this.setTokens(payload)
     onRefresh?.(this.tokens)
     return this.tokens.accessToken

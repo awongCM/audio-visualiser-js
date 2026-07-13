@@ -6,6 +6,7 @@ export class ButterchurnVisualizer {
   private visualizer: ButterchurnVisualizerInstance
   private presetNames: string[] = []
   private presetIndex = 0
+  private syntheticLevels: number[] | null = null
 
   constructor(audioContext: AudioContext, canvas: HTMLCanvasElement) {
     const butterchurn = getButterchurn()
@@ -34,11 +35,20 @@ export class ButterchurnVisualizer {
     this.visualizer.connectAudio(source)
   }
 
+  setSyntheticLevels(levels: number[] | null): void {
+    this.syntheticLevels = levels
+  }
+
   resize(width: number, height: number): void {
     this.visualizer.setRendererSize(width, height)
   }
 
   render(): void {
+    if (this.syntheticLevels) {
+      this.visualizer.render({ audioLevels: this.syntheticLevels })
+      return
+    }
+
     this.visualizer.render()
   }
 

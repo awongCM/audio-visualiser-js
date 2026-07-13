@@ -1,5 +1,6 @@
 import { buildAuthorizeUrl } from './auth/spotifyPkce'
 import { SpotifyAuthService } from './auth/spotifyAuthService'
+import { createSpotifyPulseLevels } from './audio/spotifyPulseLevels'
 import { LocalAudioSourceAdapter } from './audio/localAudioSource'
 import { LocalAudioPlayer } from './audio/localAudioPlayer'
 import { SpotifyPlaybackPlayer } from './audio/spotifyPlaybackPlayer'
@@ -12,13 +13,14 @@ type SourceMode = 'local' | 'spotify'
 
 export interface AppOptions {
   auth?: SpotifyAuthService
+  justAuthenticated?: boolean
 }
 
 export function createApp(root: HTMLElement, options: AppOptions = {}): () => void {
   const auth = options.auth ?? new SpotifyAuthService()
   const localPlayer = new LocalAudioPlayer()
   const localSource = new LocalAudioSourceAdapter(localPlayer)
-  const spotifyPlayer = new SpotifyPlaybackPlayer(auth)
+  let spotifyPlayer = new SpotifyPlaybackPlayer(auth)
 
   let sourceMode: SourceMode = 'local'
   let spotifyReady = false
@@ -178,7 +180,7 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
 
     sourceNote.textContent = isLocal
       ? ''
-      : 'Spotify streams through the Web Playback SDK. Spectrum mode needs local files — use Butterchurn here.'
+      : 'Spotify uses timed pulse visuals until analysis sync (Phase 2b) merges. Spectrum stays local-only.'
 
     const authenticated = auth.tokens.isAuthenticated()
     spotifyLoginButton.classList.toggle('hidden', authenticated)
@@ -189,8 +191,8 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
       ? localSource.playbackState === 'idle'
       : !authenticated || !spotifyReady
 
-    playButton.textContent =
-      activeSource().playbackState === 'playing' ? 'Pause' : 'Play'
+    const playbackState = activeSource().playbackState
+    playButton.textContent = playbackState === 'playing' ? 'Pause' : 'Play'
 
     updateModeUi()
     updateTransport()
@@ -224,6 +226,19 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
 
   const renderFrame = () => {
     if (mode === 'butterchurn') {
+      if (sourceMode === 'spotify') {
+        const playing = spotifyPlayer.playbackState === 'playing'
+        butterchurnViz.setSyntheticLevels(
+          createSpotifyPulseLevels(
+            spotifyPlayer.getCurrentTime(),
+            spotifyPlayer.getDuration(),
+            playing,
+          ),
+        )
+      } else {
+        butterchurnViz.setSyntheticLevels(null)
+      }
+
       butterchurnViz.render()
     } else if (sourceMode === 'local') {
       spectrumViz.render()
@@ -252,6 +267,7 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
   const initializeSpotify = async () => {
     try {
       setStatus('Connecting Spotify player...')
+      spotifyPlayer.setErrorHandler((message) => setStatus(message))
       await spotifyPlayer.initialize()
       spotifyReady = true
       updateSourceUi()
@@ -266,7 +282,9 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
   updateSourceUi()
   animationFrame = window.requestAnimationFrame(renderFrame)
 
-  if (auth.tokens.isAuthenticated()) {
+  if (options.justAuthenticated && auth.tokens.isAuthenticated()) {
+    sourceMode = 'spotify'
+    updateSourceUi()
     void initializeSpotify()
   }
 
@@ -293,8 +311,9 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
   playButton.addEventListener('click', async () => {
     try {
       await activeSource().togglePlayback()
-      playButton.textContent = activeSource().playbackState === 'playing' ? 'Pause' : 'Play'
-      setStatus(activeSource().playbackState === 'playing' ? 'Playing' : 'Paused')
+      updateSourceUi()
+      const playbackState = activeSource().playbackState
+      setStatus(playbackState === 'playing' ? 'Playing' : 'Paused')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Playback failed'
       setStatus(message)
@@ -336,7 +355,8 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
 
   spotifyLogoutButton.addEventListener('click', () => {
     auth.tokens.clear()
-    spotifyPlayer.dispose()
+    spotifyPlayer.disconnect()
+    spotifyPlayer = new SpotifyPlaybackPlayer(auth)
     spotifyReady = false
     sourceMode = 'local'
     updateSourceUi()

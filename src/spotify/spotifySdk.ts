@@ -65,6 +65,8 @@ declare global {
   }
 }
 
+const SDK_LOAD_TIMEOUT_MS = 15_000
+
 let sdkPromise: Promise<void> | null = null
 
 export function loadSpotifyPlaybackSdk(): Promise<void> {
@@ -77,10 +79,37 @@ export function loadSpotifyPlaybackSdk(): Promise<void> {
   }
 
   sdkPromise = new Promise<void>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      sdkPromise = null
+      reject(new Error('Timed out loading Spotify Web Playback SDK'))
+    }, SDK_LOAD_TIMEOUT_MS)
+
+    const finish = () => {
+      window.clearTimeout(timeoutId)
+      resolve()
+    }
+
+    const fail = (message: string) => {
+      window.clearTimeout(timeoutId)
+      sdkPromise = null
+      reject(new Error(message))
+    }
+
+    if (window.Spotify?.Player) {
+      finish()
+      return
+    }
+
     const existing = document.querySelector<HTMLScriptElement>('script[data-spotify-sdk]')
 
     if (existing) {
-      window.onSpotifyWebPlaybackSDKReady = () => resolve()
+      window.onSpotifyWebPlaybackSDKReady = () => {
+        if (window.Spotify?.Player) {
+          finish()
+        } else {
+          fail('Spotify Web Playback SDK loaded but Player is unavailable')
+        }
+      }
       return
     }
 
@@ -90,11 +119,17 @@ export function loadSpotifyPlaybackSdk(): Promise<void> {
     script.dataset.spotifySdk = 'true'
 
     script.onerror = () => {
-      sdkPromise = null
-      reject(new Error('Failed to load Spotify Web Playback SDK'))
+      fail('Failed to load Spotify Web Playback SDK')
     }
 
-    window.onSpotifyWebPlaybackSDKReady = () => resolve()
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      if (window.Spotify?.Player) {
+        finish()
+      } else {
+        fail('Spotify Web Playback SDK loaded but Player is unavailable')
+      }
+    }
+
     document.head.appendChild(script)
   })
 
