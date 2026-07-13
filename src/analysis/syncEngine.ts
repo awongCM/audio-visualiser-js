@@ -55,6 +55,12 @@ export class AnalysisSyncEngine {
     return () => this.listeners.get(event)?.delete(handler)
   }
 
+  resetEventIndices(): void {
+    this.lastBeatIndex = -1
+    this.lastBarIndex = -1
+    this.lastSectionIndex = -1
+  }
+
   update(timeSeconds: number): SyncSnapshot {
     if (!this.analysis) {
       return {

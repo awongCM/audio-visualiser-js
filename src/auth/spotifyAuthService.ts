@@ -1,4 +1,5 @@
 import { consumeOAuthState, consumeVerifier } from './spotifyPkce'
+import { parseSpotifyTokenPayload } from './spotifyTokenPayload'
 import { SpotifyTokenManager } from './spotifyTokenManager'
 import { spotifyConfig } from '../config/spotify'
 
@@ -49,7 +50,7 @@ export class SpotifyAuthService {
       throw new Error('Failed to exchange Spotify authorization code')
     }
 
-    const payload = await response.json()
+    const payload = parseSpotifyTokenPayload(await response.json())
     this.tokens.setTokens(payload)
     this.clearAuthParams()
     return true

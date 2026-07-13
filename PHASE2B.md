@@ -16,9 +16,9 @@ npm run dev
 
 1. **Connect Spotify** (needed to call the Audio Analysis API)
 2. Load the **demo track** or any local file for playback timing
-3. Enter a **Spotify track ID** (demo pre-fills `0VjIjW4GlUZAMYd2vXMi3b`) and click **Load analysis**
+3. Paste the **matching Spotify track ID** for that audio and click **Load analysis**
 4. Enable **Analysis sync** — Butterchurn uses beat/section-driven synthetic levels
-5. Presets auto-advance on each new **section**; manual Prev/Next disables auto mode
+5. Presets advance to the **next** preset on each new section
 
 The timeline strip at the bottom shows section boundaries and the playhead.
 

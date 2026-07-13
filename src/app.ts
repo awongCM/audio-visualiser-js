@@ -3,7 +3,7 @@ import { SpotifyAuthService } from './auth/spotifyAuthService'
 import { AnalysisSyncController } from './analysis/analysisSyncController'
 import { createSyntheticAudioLevels } from './analysis/syntheticLevels'
 import { LocalAudioPlayer } from './audio/localAudioPlayer'
-import { DEMO_TRACK_ID, isSpotifyConfigured, spotifyConfig } from './config/spotify'
+import { isSpotifyConfigured, spotifyConfig } from './config/spotify'
 import { ButterchurnVisualizer } from './visualizers/butterchurnVisualizer'
 import { SpectrumVisualizer } from './visualizers/spectrumVisualizer'
 
@@ -45,7 +45,7 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
             <input id="sync-enabled" type="checkbox" />
             <span>Analysis sync</span>
           </label>
-          <input id="track-id-input" class="track-input" type="text" placeholder="Spotify track ID or URL" />
+          <input id="track-id-input" class="track-input" type="text" placeholder="Spotify track ID for the audio you're playing" />
           <button id="fetch-analysis" type="button" disabled>Load analysis</button>
           <button id="spotify-login" type="button">Connect Spotify</button>
           <button id="spotify-logout" type="button" class="ghost hidden">Disconnect</button>
@@ -253,19 +253,18 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
     animationFrame = window.requestAnimationFrame(renderFrame)
   }
 
-  analysis.engine.on('section', (index) => {
+  analysis.engine.on('section', () => {
     if (!analysisSyncEnabled || !autoPresetOnSection) {
       return
     }
 
-    butterchurnViz.loadPresetByIndex(index)
+    butterchurnViz.nextPreset()
     updateModeUi()
   })
 
   resizeCanvas()
   updateModeUi()
   updateAuthUi()
-  trackIdInput.value = DEMO_TRACK_ID
   animationFrame = window.requestAnimationFrame(renderFrame)
 
   if (!isSpotifyConfigured()) {
@@ -299,11 +298,11 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
   })
 
   demoButton.addEventListener('click', async () => {
-    trackIdInput.value = DEMO_TRACK_ID
     await loadTrack(
       () => player.loadUrl('/demo/demo-track.mp3', 'demo-track.mp3'),
       'demo track',
     )
+    setStatus('Demo loaded — paste the matching Spotify track ID, then Load analysis')
   })
 
   playButton.addEventListener('click', async () => {
@@ -394,6 +393,7 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
   seekBar.addEventListener('input', () => {
     const ratio = Number(seekBar.value) / 1000
     player.seek(ratio)
+    analysis.engine.resetEventIndices()
     updateTransport()
   })
 

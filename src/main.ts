@@ -17,7 +17,10 @@ async function bootstrap(): Promise<void> {
     await auth.handleRedirectCallback()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Spotify login failed'
-    root.innerHTML = `<p class="status">${message}</p>`
+    const status = document.createElement('p')
+    status.className = 'status'
+    status.textContent = message
+    root.replaceChildren(status)
     return
   }
 

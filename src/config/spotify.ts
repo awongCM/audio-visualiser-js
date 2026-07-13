@@ -1,4 +1,10 @@
-const SCOPES = ['user-read-email', 'user-read-private'] as const
+const SCOPES = [
+  'streaming',
+  'user-read-email',
+  'user-read-private',
+  'user-read-playback-state',
+  'user-modify-playback-state',
+] as const
 
 export const spotifyConfig = {
   clientId: import.meta.env.VITE_SPOTIFY_CLIENT_ID ?? '',
@@ -14,6 +20,3 @@ export const spotifyConfig = {
 export function isSpotifyConfigured(): boolean {
   return spotifyConfig.clientId.length > 0
 }
-
-// Demo track used when analysis sync is enabled with the built-in demo MP3
-export const DEMO_TRACK_ID = '0VjIjW4GlUZAMYd2vXMi3b'
