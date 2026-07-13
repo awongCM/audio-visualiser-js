@@ -31,6 +31,10 @@ export class ButterchurnVisualizer {
     return this.presetNames[this.presetIndex] ?? 'No preset loaded'
   }
 
+  get presetCount(): number {
+    return this.presetNames.length
+  }
+
   connectAudio(source: AudioNode): void {
     this.visualizer.connectAudio(source)
   }
@@ -71,9 +75,14 @@ export class ButterchurnVisualizer {
     this.loadPresetByIndex(this.presetIndex)
   }
 
-  private loadPresetByIndex(index: number): void {
+  loadPresetByIndex(index: number): void {
+    if (this.presetNames.length === 0) {
+      return
+    }
+
+    this.presetIndex = ((index % this.presetNames.length) + this.presetNames.length) % this.presetNames.length
     const presets = getButterchurnPresets().getPresets()
-    const presetName = this.presetNames[index]
+    const presetName = this.presetNames[this.presetIndex]
     const preset = presets[presetName]
 
     if (!preset) {

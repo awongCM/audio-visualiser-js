@@ -6,6 +6,7 @@ Phase 2 is split across two parallel worktrees so each feature can be developed 
 |----------|--------|-------|
 | `worktrees/phase2-spotify` | `cursor/phase2-spotify-playback-ca3d` | Spotify OAuth + Web Playback SDK |
 | `worktrees/phase2-analysis` | `cursor/phase2-audio-analysis-ca3d` | Audio Analysis API full-track sync |
+| *(integrated)* | `cursor/phase2-integration-ca3d` | Both features merged — auto analysis on Spotify tracks |
 
 ## Commands
 

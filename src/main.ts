@@ -1,5 +1,6 @@
 import './style.css'
 import { SpotifyAuthService } from './auth/spotifyAuthService'
+import { AnalysisSyncController } from './analysis/analysisSyncController'
 import { createApp } from './app'
 
 const root = document.querySelector<HTMLDivElement>('#app')
@@ -10,6 +11,7 @@ async function bootstrap(): Promise<void> {
   }
 
   const auth = new SpotifyAuthService()
+  const analysis = new AnalysisSyncController(auth)
   let justAuthenticated = false
 
   try {
@@ -23,7 +25,7 @@ async function bootstrap(): Promise<void> {
     return
   }
 
-  createApp(root, { auth, justAuthenticated })
+  createApp(root, { auth, analysis, justAuthenticated })
 }
 
 void bootstrap()

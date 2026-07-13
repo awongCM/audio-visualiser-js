@@ -57,10 +57,7 @@ export class SpotifyAuthService {
   }
 
   async getAccessToken(): Promise<string> {
-    return this.tokens.ensureAccessToken(
-      spotifyConfig.clientId,
-      spotifyConfig.tokenUrl,
-    )
+    return this.tokens.ensureAccessToken(spotifyConfig.clientId, spotifyConfig.tokenUrl)
   }
 
   clearAuthParams(): void {

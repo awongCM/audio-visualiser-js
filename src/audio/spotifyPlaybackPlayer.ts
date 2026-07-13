@@ -28,6 +28,7 @@ export class SpotifyPlaybackPlayer implements AudioSource {
   private paused = true
   private positionUpdatedAt = 0
   private onError: SpotifyPlayerErrorHandler | null = null
+  private onTrackChange: ((trackId: string) => void) | null = null
 
   constructor(auth: SpotifyAuthService) {
     this.auth = auth
@@ -61,6 +62,10 @@ export class SpotifyPlaybackPlayer implements AudioSource {
 
   setErrorHandler(handler: SpotifyPlayerErrorHandler | null): void {
     this.onError = handler
+  }
+
+  setTrackChangeHandler(handler: ((trackId: string) => void) | null): void {
+    this.onTrackChange = handler
   }
 
   async initialize(): Promise<void> {
@@ -248,11 +253,17 @@ export class SpotifyPlaybackPlayer implements AudioSource {
       return
     }
 
+    const previousTrackId = this.currentTrack?.id ?? null
     this.currentTrack = playerState.track_window.current_track
     this.positionMs = playerState.position
     this.durationMs = playerState.duration
     this.paused = playerState.paused
     this.positionUpdatedAt = performance.now()
     this.state = playerState.paused ? 'paused' : 'playing'
+
+    const nextTrackId = this.currentTrack.id
+    if (nextTrackId && nextTrackId !== previousTrackId) {
+      this.onTrackChange?.(nextTrackId)
+    }
   }
 }
