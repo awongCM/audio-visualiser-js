@@ -95,6 +95,8 @@ export class SpotifyPlaybackPlayer implements AudioSource {
             const message =
               error instanceof Error ? error.message : 'Spotify authentication failed'
             this.reportError(message)
+            // Empty token lets the SDK emit authentication_error instead of hanging.
+            callback('')
           })
       },
     })

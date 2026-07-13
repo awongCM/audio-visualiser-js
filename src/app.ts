@@ -1,6 +1,11 @@
 import { buildAuthorizeUrl } from './auth/spotifyPkce'
 import { SpotifyAuthService } from './auth/spotifyAuthService'
 import { AnalysisSyncController } from './analysis/analysisSyncController'
+import {
+  AnalysisLoadCoordinator,
+  shouldUseAnalysisSync,
+  timelineDuration,
+} from './analysis/analysisContext'
 import { createSyntheticAudioLevels } from './analysis/syntheticLevels'
 import { createSpotifyPulseLevels } from './audio/spotifyPulseLevels'
 import { LocalAudioSourceAdapter } from './audio/localAudioSource'
@@ -30,8 +35,9 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
   let spotifyReady = false
   let analysisSyncEnabled = false
   let autoPresetOnSection = true
+  let userSyncPreference: boolean | null = null
   let lastAutoLoadedTrackId: string | null = null
-  let analysisRequest: Promise<void> | null = null
+  const analysisLoadCoordinator = new AnalysisLoadCoordinator()
 
   root.innerHTML = `
     <div class="app">
@@ -173,11 +179,19 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
       spotifyTrackIdLabel.textContent = `Spotify track: ${spotifyPlayer.trackId}`
     }
 
-    syncStatus.textContent = analysisSyncEnabled
-      ? loaded
-        ? `Analysis sync on — ${analysis.engine.sections.length} sections`
-        : 'Analysis sync on — waiting for track analysis'
-      : 'Analysis sync off'
+    syncStatus.textContent = shouldUseAnalysisSync({
+      userSyncEnabled: analysisSyncEnabled,
+      analysisLoaded: loaded,
+      activeTrackId: analysis.activeTrackId,
+      sourceMode,
+      spotifyTrackId: spotifyPlayer.trackId,
+    })
+      ? `Analysis sync on — ${analysis.engine.sections.length} sections`
+      : analysisSyncEnabled
+        ? loaded
+          ? 'Analysis loaded — waiting for matching track'
+          : 'Analysis sync on — waiting for track analysis'
+        : 'Analysis sync off'
 
     sourceNote.textContent = isSpotify
       ? 'Spotify tracks auto-load analysis. Spectrum stays local-only.'
@@ -210,7 +224,13 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
     spectrumViz.resize(width, height)
   }
 
-  const drawTimeline = (currentTime: number, duration: number) => {
+  const drawTimeline = (currentTime: number, playerDuration: number) => {
+    const duration = timelineDuration({
+      analysisLoaded: analysis.analysisLoaded,
+      analysisDuration: analysis.engine.duration,
+      playerDuration,
+    })
+
     if (!timelineCtx || !analysis.analysisLoaded || duration <= 0) {
       timelineCanvas.style.opacity = '0'
       return
@@ -306,10 +326,23 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
     butterchurnViz.connectAudio(source)
   }
 
-  const enableAnalysisSync = () => {
-    analysisSyncEnabled = true
-    syncEnabledInput.checked = true
-    autoPresetOnSection = true
+  const clearAnalysisState = () => {
+    analysisLoadCoordinator.startRequest()
+    analysis.clear()
+    lastAutoLoadedTrackId = null
+    updateSyncUi()
+  }
+
+  const applyLoadedAnalysis = (trackId: string) => {
+    lastAutoLoadedTrackId = trackId
+    trackIdInput.value = trackId
+
+    if (userSyncPreference !== false) {
+      analysisSyncEnabled = true
+      syncEnabledInput.checked = true
+      autoPresetOnSection = true
+    }
+
     updateSyncUi()
   }
 
@@ -318,32 +351,21 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
       return
     }
 
-    if (analysisRequest) {
-      await analysisRequest
-      if (trackId === lastAutoLoadedTrackId) {
-        return
-      }
+    const generation = analysisLoadCoordinator.startRequest()
+    const result = await analysisLoadCoordinator.run(trackId, generation, async (id) => {
+      setStatus(`Loading analysis for ${label}...`)
+      await analysis.loadForTrackId(id)
+    })
+
+    if (result === 'applied') {
+      applyLoadedAnalysis(trackId)
+      setStatus(`Analysis sync ready for ${label}`)
+      return
     }
 
-    const request = (async () => {
-      try {
-        setStatus(`Loading analysis for ${label}...`)
-        await analysis.loadForTrackId(trackId)
-        lastAutoLoadedTrackId = trackId
-        trackIdInput.value = trackId
-        enableAnalysisSync()
-        setStatus(`Analysis sync ready for ${label}`)
-        updateSyncUi()
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to load analysis'
-        setStatus(message)
-      } finally {
-        analysisRequest = null
-      }
-    })()
-
-    analysisRequest = request
-    await request
+    if (result === 'failed') {
+      setStatus('Failed to load analysis')
+    }
   }
 
   const renderFrame = () => {
@@ -353,7 +375,15 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
       const duration = source.getDuration()
       const playing = source.playbackState === 'playing'
 
-      if (analysisSyncEnabled && analysis.analysisLoaded) {
+      const useAnalysisSync = shouldUseAnalysisSync({
+        userSyncEnabled: analysisSyncEnabled,
+        analysisLoaded: analysis.analysisLoaded,
+        activeTrackId: analysis.activeTrackId,
+        sourceMode,
+        spotifyTrackId: spotifyPlayer.trackId,
+      })
+
+      if (useAnalysisSync) {
         const snapshot = analysis.engine.update(currentTime)
         butterchurnViz.setSyntheticLevels(createSyntheticAudioLevels(snapshot))
       } else if (sourceMode === 'spotify') {
@@ -430,6 +460,7 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
 
   const loadLocalTrack = async (load: () => Promise<void>, label: string) => {
     try {
+      clearAnalysisState()
       setStatus(`Loading ${label}...`)
       await load()
       connectVisualizer()
@@ -455,7 +486,6 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
   })
 
   demoButton.addEventListener('click', async () => {
-    lastAutoLoadedTrackId = null
     await loadLocalTrack(
       () => localSource.loadUrl('/demo/demo-track.mp3', 'demo-track.mp3'),
       'demo track',
@@ -476,6 +506,8 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
 
   sourceLocalButton.addEventListener('click', () => {
     sourceMode = 'local'
+    clearAnalysisState()
+    connectVisualizer()
     updateSourceUi()
   })
 
@@ -511,9 +543,11 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
 
   spotifyLogoutButton.addEventListener('click', () => {
     auth.tokens.clear()
+    analysisLoadCoordinator.startRequest()
     analysis.clear()
     analysisSyncEnabled = false
     syncEnabledInput.checked = false
+    userSyncPreference = null
     lastAutoLoadedTrackId = null
     spotifyPlayer.disconnect()
     spotifyPlayer = new SpotifyPlaybackPlayer(auth)
@@ -563,6 +597,7 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
   })
 
   syncEnabledInput.addEventListener('change', () => {
+    userSyncPreference = syncEnabledInput.checked
     analysisSyncEnabled = syncEnabledInput.checked
     updateSyncUi()
   })
@@ -571,10 +606,8 @@ export function createApp(root: HTMLElement, options: AppOptions = {}): () => vo
     try {
       setStatus('Fetching audio analysis...')
       await analysis.loadForTrackInput(trackIdInput.value)
-      lastAutoLoadedTrackId = analysis.activeTrackId
-      enableAnalysisSync()
+      applyLoadedAnalysis(analysis.activeTrackId ?? trackIdInput.value)
       setStatus(`Analysis loaded for track ${analysis.activeTrackId}`)
-      updateSyncUi()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load analysis'
       setStatus(message)
