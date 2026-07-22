@@ -120,14 +120,45 @@ button:disabled {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.source-toggle {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.source-toggle button,
 .mode-toggle button {
   border: none;
   background: transparent;
 }
 
+.source-toggle button.active,
 .mode-toggle button.active {
   background: linear-gradient(135deg, #6d5bff, #ff4fd8);
   color: white;
+}
+
+.source-panel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.source-panel.hidden,
+.hidden {
+  display: none !important;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+.source-note {
+  margin-top: 0.35rem !important;
+  color: rgba(124, 247, 255, 0.85) !important;
+  font-size: 0.82rem !important;
 }
 
 .stage {
@@ -192,6 +223,63 @@ button:disabled {
   padding: 0 1.25rem 1rem;
   color: rgba(255, 255, 255, 0.62);
   font-size: 0.9rem;
+}
+
+.analysis-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  width: 100%;
+  padding: 0 1.25rem 0.75rem;
+}
+
+.sync-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.9rem;
+}
+
+.track-input {
+  min-width: min(18rem, 100%);
+  min-height: 44px;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+button.hidden,
+.hidden {
+  display: none !important;
+}
+
+.sync-status {
+  color: rgba(124, 247, 255, 0.85) !important;
+}
+
+.spotify-track-id {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.85rem;
+}
+
+.timeline-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 28px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 @media (max-width: 720px) {

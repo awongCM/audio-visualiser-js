@@ -6,6 +6,7 @@ export class ButterchurnVisualizer {
   private visualizer: ButterchurnVisualizerInstance
   private presetNames: string[] = []
   private presetIndex = 0
+  private syntheticLevels: number[] | null = null
 
   constructor(audioContext: AudioContext, canvas: HTMLCanvasElement) {
     const butterchurn = getButterchurn()
@@ -30,8 +31,16 @@ export class ButterchurnVisualizer {
     return this.presetNames[this.presetIndex] ?? 'No preset loaded'
   }
 
+  get presetCount(): number {
+    return this.presetNames.length
+  }
+
   connectAudio(source: AudioNode): void {
     this.visualizer.connectAudio(source)
+  }
+
+  setSyntheticLevels(levels: number[] | null): void {
+    this.syntheticLevels = levels
   }
 
   resize(width: number, height: number): void {
@@ -39,6 +48,11 @@ export class ButterchurnVisualizer {
   }
 
   render(): void {
+    if (this.syntheticLevels) {
+      this.visualizer.render({ audioLevels: this.syntheticLevels })
+      return
+    }
+
     this.visualizer.render()
   }
 
@@ -61,9 +75,14 @@ export class ButterchurnVisualizer {
     this.loadPresetByIndex(this.presetIndex)
   }
 
-  private loadPresetByIndex(index: number): void {
+  loadPresetByIndex(index: number): void {
+    if (this.presetNames.length === 0) {
+      return
+    }
+
+    this.presetIndex = ((index % this.presetNames.length) + this.presetNames.length) % this.presetNames.length
     const presets = getButterchurnPresets().getPresets()
-    const presetName = this.presetNames[index]
+    const presetName = this.presetNames[this.presetIndex]
     const preset = presets[presetName]
 
     if (!preset) {
