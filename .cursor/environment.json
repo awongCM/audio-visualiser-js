@@ -1,0 +1,20 @@
+{
+  "name": "audio-visualiser-js",
+  "install": "npm install && npx playwright install chromium",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "npm run dev",
+      "description": "Vite dev server for interactive work"
+    },
+    {
+      "name": "preview",
+      "command": "npm run build && npm run preview",
+      "description": "Production preview on port 4173 for demo capture"
+    }
+  ],
+  "ports": [
+    { "name": "vite-dev", "port": 5173 },
+    { "name": "vite-preview", "port": 4173 }
+  ]
+}
